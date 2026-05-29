@@ -1,0 +1,411 @@
+// =============================================================================
+// DevPilot — Prisma Schema
+// PostgreSQL · UUIDs · RBAC · Full relations · Indexes · Cascade deletes
+// =============================================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// =============================================================================
+// ENUMS
+// =============================================================================
+
+enum Role {
+  ADMIN
+  MANAGER
+  DEVELOPER
+  QA_TESTER
+}
+
+enum ProjectStatus {
+  PLANNING
+  ACTIVE
+  ON_HOLD
+  COMPLETED
+  CANCELLED
+}
+
+enum ProjectMemberRole {
+  MANAGER
+  DEVELOPER
+  QA_TESTER
+  VIEWER
+}
+
+enum SprintStatus {
+  PLANNED
+  ACTIVE
+  COMPLETED
+  CANCELLED
+}
+
+enum TaskStatus {
+  TODO
+  IN_PROGRESS
+  IN_REVIEW
+  COMPLETED
+  BLOCKED
+}
+
+enum TaskPriority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum PullRequestState {
+  OPEN
+  CLOSED
+  MERGED
+}
+
+enum RiskLevel {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum EntityType {
+  PROJECT
+  TASK
+  SPRINT
+  COMMIT
+  PULL_REQUEST
+  MEMBER
+  COMMENT
+  REPOSITORY
+  MESSAGE
+  PREDICTION
+}
+
+// =============================================================================
+// USER
+// =============================================================================
+
+model User {
+  id        String   @id @default(uuid())
+  name      String
+  email     String   @unique
+  avatar    String?
+  role      Role     @default(DEVELOPER)
+
+  // OAuth provider IDs — both nullable (user may sign in via either)
+  githubId  String?  @unique
+  googleId  String?  @unique
+
+  // GitHub OAuth access token (encrypted at app level before storing)
+  githubToken String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  ownedProjects    Project[]         @relation("ProjectOwner")
+  projectMembers   ProjectMember[]
+  assignedTasks    Task[]            @relation("TaskAssignee")
+  reportedTasks    Task[]            @relation("TaskReporter")
+  taskComments     TaskComment[]
+  sentMessages     Message[]         @relation("MessageSender")
+  receivedMessages Message[]         @relation("MessageReceiver")
+  activityLogs     ActivityLog[]
+
+  @@index([email])
+  @@index([githubId])
+  @@index([googleId])
+  @@map("users")
+}
+
+// =============================================================================
+// PROJECT
+// =============================================================================
+
+model Project {
+  id          String        @id @default(uuid())
+  name        String
+  description String?
+  ownerId     String
+  deadline    DateTime?
+  progress    Int           @default(0)        // 0–100 calculated by backend
+  status      ProjectStatus @default(PLANNING)
+
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  // Relations
+  owner        User            @relation("ProjectOwner", fields: [ownerId], references: [id], onDelete: Restrict)
+  members      ProjectMember[]
+  sprints      Sprint[]
+  tasks        Task[]
+  repositories Repository[]
+  messages     Message[]
+  activityLogs ActivityLog[]
+
+  @@index([ownerId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("projects")
+}
+
+// =============================================================================
+// PROJECT MEMBER  (join table — User ↔ Project with per-project role)
+// =============================================================================
+
+model ProjectMember {
+  id        String            @id @default(uuid())
+  projectId String
+  userId    String
+  role      ProjectMemberRole @default(DEVELOPER)
+  joinedAt  DateTime          @default(now())
+
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, userId])           // one membership per user per project
+  @@index([projectId])
+  @@index([userId])
+  @@map("project_members")
+}
+
+// =============================================================================
+// SPRINT
+// =============================================================================
+
+model Sprint {
+  id        String       @id @default(uuid())
+  projectId String
+  name      String
+  goal      String?
+  startDate DateTime
+  endDate   DateTime
+  status    SprintStatus @default(PLANNED)
+
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  tasks   Task[]
+
+  @@index([projectId])
+  @@index([status])
+  @@index([startDate, endDate])
+  @@map("sprints")
+}
+
+// =============================================================================
+// TASK
+// =============================================================================
+
+model Task {
+  id          String       @id @default(uuid())
+  projectId   String
+  sprintId    String?      // nullable — backlog tasks have no sprint
+  assigneeId  String?      // nullable — unassigned tasks allowed
+  reporterId  String
+  title       String
+  description String?
+  priority    TaskPriority @default(MEDIUM)
+  status      TaskStatus   @default(TODO)
+  orderIndex  Float        @default(0)          // float for gap-based kanban ordering
+  dueDate     DateTime?
+
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  // Relations
+  project  Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  sprint   Sprint?       @relation(fields: [sprintId], references: [id], onDelete: SetNull)
+  assignee User?         @relation("TaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  reporter User          @relation("TaskReporter", fields: [reporterId], references: [id], onDelete: Restrict)
+  comments TaskComment[]
+  commits  Commit[]
+
+  @@index([projectId])
+  @@index([sprintId])
+  @@index([assigneeId])
+  @@index([status])
+  @@index([priority])
+  @@index([projectId, status])              // composite — kanban board query
+  @@index([sprintId, status])               // composite — sprint board query
+  @@map("tasks")
+}
+
+// =============================================================================
+// TASK COMMENT
+// =============================================================================
+
+model TaskComment {
+  id        String   @id @default(uuid())
+  taskId    String
+  userId    String
+  content   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([taskId])
+  @@index([userId])
+  @@map("task_comments")
+}
+
+// =============================================================================
+// REPOSITORY
+// =============================================================================
+
+model Repository {
+  id            String @id @default(uuid())
+  projectId     String
+  githubRepoId  String @unique              // GitHub's numeric repo ID
+  name          String                       // short name  e.g. "devpilot"
+  fullName      String                       // owner/repo  e.g. "team/devpilot"
+  webhookSecret String                       // HMAC secret — store encrypted
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  project           Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  commits           Commit[]
+  pullRequests      PullRequest[]
+  predictionResults PredictionResult[]
+
+  @@index([projectId])
+  @@index([githubRepoId])
+  @@map("repositories")
+}
+
+// =============================================================================
+// COMMIT
+// =============================================================================
+
+model Commit {
+  id           String   @id @default(uuid())
+  repoId       String
+  taskId       String?  // nullable — commits without a #TASK-xx reference
+  sha          String
+  message      String
+  authorName   String
+  filesChanged Json     @default("[]")       // array of file path strings
+  committedAt  DateTime
+
+  createdAt    DateTime @default(now())
+
+  repo Repository @relation(fields: [repoId], references: [id], onDelete: Cascade)
+  task Task?      @relation(fields: [taskId], references: [id], onDelete: SetNull)
+
+  @@unique([repoId, sha])                    // same SHA can't be stored twice per repo
+  @@index([repoId])
+  @@index([taskId])
+  @@index([committedAt])
+  @@map("commits")
+}
+
+// =============================================================================
+// PULL REQUEST
+// =============================================================================
+
+model PullRequest {
+  id             String           @id @default(uuid())
+  repoId         String
+  githubPrNumber Int
+  title          String
+  state          PullRequestState @default(OPEN)
+  mergedAt       DateTime?
+
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  repo Repository @relation(fields: [repoId], references: [id], onDelete: Cascade)
+
+  @@unique([repoId, githubPrNumber])         // one PR number per repo
+  @@index([repoId])
+  @@index([state])
+  @@map("pull_requests")
+}
+
+// =============================================================================
+// MESSAGE
+// =============================================================================
+
+model Message {
+  id         String   @id @default(uuid())
+  projectId  String
+  senderId   String
+  receiverId String?  // null when isGroup = true
+  content    String
+  isGroup    Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  project  Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  sender   User    @relation("MessageSender",   fields: [senderId],   references: [id], onDelete: Cascade)
+  receiver User?   @relation("MessageReceiver", fields: [receiverId], references: [id], onDelete: SetNull)
+
+  @@index([projectId])
+  @@index([senderId])
+  @@index([receiverId])
+  @@index([projectId, isGroup])              // group channel query
+  @@index([createdAt])
+  @@map("messages")
+}
+
+// =============================================================================
+// PREDICTION RESULT  (ML bug-risk output per file)
+// =============================================================================
+
+model PredictionResult {
+  id              String    @id @default(uuid())
+  repoId          String
+  filePath        String
+
+  // Raw features stored alongside prediction for model retraining
+  commitFrequency Float
+  codeChurn       Float
+  contributors    Int
+  prCount         Int
+  bugFixRatio     Float
+
+  // Prediction output
+  riskLevel       RiskLevel
+  confidence      Float                       // 0.0 – 1.0
+
+  predictedAt     DateTime  @default(now())
+
+  repo Repository @relation(fields: [repoId], references: [id], onDelete: Cascade)
+
+  @@index([repoId])
+  @@index([riskLevel])
+  @@index([repoId, filePath])                // look up latest prediction for a file
+  @@index([predictedAt])
+  @@map("prediction_results")
+}
+
+// =============================================================================
+// ACTIVITY LOG  (immutable audit trail — no updatedAt)
+// =============================================================================
+
+model ActivityLog {
+  id         String     @id @default(uuid())
+  projectId  String
+  userId     String
+  action     String                           // e.g. "TASK_STATUS_CHANGED"
+  entityType EntityType
+  entityId   String                           // UUID of the affected entity
+  metadata   Json       @default("{}")        // flexible payload per action type
+  createdAt  DateTime   @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId],    references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@index([userId])
+  @@index([entityType, entityId])            // fetch all logs for one entity
+  @@index([createdAt])
+  @@map("activity_logs")
+}
