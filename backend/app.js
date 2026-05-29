@@ -1,7 +1,5 @@
 //express setup, middleware, route mounting
-// =============================================================================
 // backend/app.js — Express app setup (middleware + route mounting)
-// =============================================================================
 
 const express    = require("express");
 const cors       = require("cors");
@@ -12,10 +10,7 @@ const prisma     = require("./src/config/db");
 
 const app = express();
 
-// ---------------------------------------------------------------------------
 // SECURITY MIDDLEWARE
-// ---------------------------------------------------------------------------
-
 app.use(helmet());
 
 const allowedOrigins = (process.env.ALLOWED_ORIGINS || "http://localhost:3000").split(",");
@@ -36,9 +31,7 @@ app.use(
   })
 );
 
-// ---------------------------------------------------------------------------
 // RATE LIMITING
-// ---------------------------------------------------------------------------
 
 const limiter = rateLimit({
   windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000, // 15 min
@@ -50,37 +43,28 @@ const limiter = rateLimit({
 
 app.use("/api", limiter);
 
-// ---------------------------------------------------------------------------
 // BODY PARSING
-// ---------------------------------------------------------------------------
+
 
 // Raw body needed BEFORE json() for webhook signature verification
-app.use(
-  "/api/webhooks",
-  express.raw({ type: "application/json" })
-);
+// app.use(
+//   "/api/webhooks",
+//   express.raw({ type: "application/json" })
+// );
 
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true }));
 
-// ---------------------------------------------------------------------------
 // LOGGING
-// ---------------------------------------------------------------------------
-
 if (process.env.NODE_ENV === "development") {
   app.use(morgan("dev"));
 } else {
   app.use(morgan("combined"));
 }
 
-// ---------------------------------------------------------------------------
 // HEALTH / DB CHECK ROUTES
-// ---------------------------------------------------------------------------
 
-/**
- * GET /health
- * Basic liveness probe — confirms the server is running.
- */
+//GET /health
 app.get("/health", (req, res) => {
   res.status(200).json({
     success: true,
@@ -91,11 +75,9 @@ app.get("/health", (req, res) => {
   });
 });
 
-/**
- * GET /health/db
- * Deep health check — confirms PostgreSQL (Neon) connection is alive.
- * Runs a lightweight $queryRaw so Prisma actually opens a connection.
- */
+
+//GET /health/db
+//Deep health check — confirms PostgreSQL (Neon) connection is alive.
 app.get("/health/db", async (req, res) => {
   const start = Date.now();
   try {
@@ -123,14 +105,12 @@ app.get("/health/db", async (req, res) => {
   }
 });
 
-/**
- * GET /health/full
- * Full check: server + DB + lists all Prisma models to verify schema sync.
- */
+
+//GET /health/full
+//Full check: server + DB + lists all Prisma models to verify schema sync.
+
 app.get("/health/full", async (req, res) => {
   const checks = {};
-
-  // 1. DB ping
   try {
     await prisma.$queryRaw`SELECT 1`;
     checks.database = { status: "ok" };
@@ -138,7 +118,6 @@ app.get("/health/full", async (req, res) => {
     checks.database = { status: "error", message: e.message };
   }
 
-  // 2. Count records (lightweight sanity check)
   try {
     const [users, projects, tasks] = await Promise.all([
       prisma.user.count(),
@@ -160,9 +139,7 @@ app.get("/health/full", async (req, res) => {
   });
 });
 
-// ---------------------------------------------------------------------------
 // API ROUTES  (mount feature modules here as you build them)
-// ---------------------------------------------------------------------------
 
 // app.use("/api/auth",     require("./src/modules/auth/auth.routes"));
 // app.use("/api/projects", require("./src/modules/projects/project.routes"));
@@ -172,9 +149,7 @@ app.get("/health/full", async (req, res) => {
 // app.use("/api/analytics",require("./src/modules/analytics/analytics.routes"));
 // app.use("/api/ml",       require("./src/modules/ml/ml.routes"));
 
-// ---------------------------------------------------------------------------
 // 404 HANDLER
-// ---------------------------------------------------------------------------
 
 app.use((req, res) => {
   res.status(404).json({
@@ -183,9 +158,7 @@ app.use((req, res) => {
   });
 });
 
-// ---------------------------------------------------------------------------
 // GLOBAL ERROR HANDLER
-// ---------------------------------------------------------------------------
 
 // eslint-disable-next-line no-unused-vars
 app.use((err, req, res, next) => {

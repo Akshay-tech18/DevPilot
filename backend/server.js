@@ -1,63 +1,55 @@
 // entry point -- app + socket
-// =============================================================================
 // backend/server.js — Entry point
 // Starts Express + Socket.IO, verifies DB connection on boot
-// =============================================================================
 
 require("dotenv").config();
 
 const http   = require("http");
-const { Server } = require("socket.io");
+//const { Server } = require("socket.io");
 const app    = require("./app");
 const prisma = require("./src/config/db");
 
 const PORT = process.env.PORT || 5000;
 
-// ---------------------------------------------------------------------------
 // HTTP SERVER
-// ---------------------------------------------------------------------------
 
 const server = http.createServer(app);
 
-// ---------------------------------------------------------------------------
 // SOCKET.IO
-// ---------------------------------------------------------------------------
 
-const io = new Server(server, {
-  cors: {
-    origin:      (process.env.ALLOWED_ORIGINS || "http://localhost:3000").split(","),
-    methods:     ["GET", "POST"],
-    credentials: true,
-  },
-});
+// const io = new Server(server, {
+//   cors: {
+//     origin:      (process.env.ALLOWED_ORIGINS || "http://localhost:3000").split(","),
+//     methods:     ["GET", "POST"],
+//     credentials: true,
+//   },
+// });
 
 // Namespace: /project — clients join a room per project ID
-const projectNS = io.of("/project");
+// const projectNS = io.of("/project");
 
-projectNS.on("connection", (socket) => {
-  console.log(`[Socket] Client connected: ${socket.id}`);
+// projectNS.on("connection", (socket) => {
+//   console.log(`[Socket] Client connected: ${socket.id}`);
 
-  // Client sends: { projectId: "uuid" }
-  socket.on("join_project", (projectId) => {
-    socket.join(projectId);
-    console.log(`[Socket] ${socket.id} joined room: ${projectId}`);
-  });
+//   // Client sends: { projectId: "uuid" }
+//   socket.on("join_project", (projectId) => {
+//     socket.join(projectId);
+//     console.log(`[Socket] ${socket.id} joined room: ${projectId}`);
+//   });
 
-  socket.on("leave_project", (projectId) => {
-    socket.leave(projectId);
-  });
+//   socket.on("leave_project", (projectId) => {
+//     socket.leave(projectId);
+//   });
 
-  socket.on("disconnect", () => {
-    console.log(`[Socket] Client disconnected: ${socket.id}`);
-  });
-});
+//   socket.on("disconnect", () => {
+//     console.log(`[Socket] Client disconnected: ${socket.id}`);
+//   });
+// });
 
 // Attach io to app so routes can emit events via req.app.get("io")
-app.set("io", io);
+//app.set("io", io);
 
-// ---------------------------------------------------------------------------
 // DATABASE CONNECTION CHECK ON STARTUP
-// ---------------------------------------------------------------------------
 
 async function checkDatabaseConnection() {
   console.log("\n🔌 Checking Neon PostgreSQL connection...");
@@ -73,9 +65,8 @@ async function checkDatabaseConnection() {
   }
 }
 
-// ---------------------------------------------------------------------------
 // STARTUP
-// ---------------------------------------------------------------------------
+
 
 async function startServer() {
   const dbOk = await checkDatabaseConnection();
@@ -97,9 +88,8 @@ async function startServer() {
   });
 }
 
-// ---------------------------------------------------------------------------
+
 // GRACEFUL SHUTDOWN
-// ---------------------------------------------------------------------------
 
 async function gracefulShutdown(signal) {
   console.log(`\n[${signal}] Shutting down gracefully...`);
