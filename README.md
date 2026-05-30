@@ -1,7 +1,7 @@
 # DevPilot
 DevPilot - An Intelligent Software Project Management System with GitHub Activity Analysis and Bug Prediction 
 
-# DevPilot — Final Curated Feature Prompt
+# DevPilot — Final Curated Feature
 
 ## Project Title
 
