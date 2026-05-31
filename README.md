@@ -401,3 +401,26 @@ The final system should function as a collaborative intelligent project manageme
 * Provides real-time project monitoring
 * Predicts software defects using machine learning
 * Supports modern communication features similar to ClickUp and Slack
+
+
+# To start the backend the initial setup is 
+
+First in command prompt 
+install pnpm gobally 
+command is - npm install -g pnpm
+To verify the version - pnpm -v
+
+Next step is to add the Database URL
+from the neon tech add the Database url and direct url 
+
+next in project terminal 
+cd backend
+1. pnpm init
+2. pnpm add express cors dotenv helmet morgan bcryptjs jsonwebtoken cookie-parser socket.io axios zod
+3. pnpm add passport passport-google-oauth20 passport-github2
+4. pnpm add @prisma/client
+5. pnpm add -D prisma
+6. pnpm add -D nodemon eslint prettier
+7. node server.js  || nodemon server.js || pnpm dev
+
+BOOM server started !!!!!!!
