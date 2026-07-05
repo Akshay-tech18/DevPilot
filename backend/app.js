@@ -7,7 +7,8 @@ const helmet     = require("helmet");
 const morgan     = require("morgan");
 const rateLimit  = require("express-rate-limit");
 const prisma     = require("./src/config/db");
-
+const passport = require("./src/config/passport");
+const cookieParser = require("cookie-parser");
 const app = express();
 
 // SECURITY MIDDLEWARE
@@ -139,9 +140,11 @@ app.get("/health/full", async (req, res) => {
   });
 });
 
+app.use(cookieParser());
+app.use(passport.initialize());
 // API ROUTES  (mount feature modules here as you build them)
 
-// app.use("/api/auth",     require("./src/modules/auth/auth.routes"));
+app.use("/api/auth",     require("./src/modules/auth/auth.routes"));
 // app.use("/api/projects", require("./src/modules/projects/project.routes"));
 // app.use("/api/tasks",    require("./src/modules/tasks/task.routes"));
 // app.use("/api/webhooks", require("./src/modules/github/github.routes"));
